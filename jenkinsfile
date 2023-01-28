@@ -1,0 +1,81 @@
+def AWS_DEFAULT_REGION="us-west-2"
+pipeline {
+    agent any
+    environment {
+        FILE = "file.yaml"
+        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')  
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+    }
+    stages {
+        stage('gitclone') {
+            steps {
+            checkout([$class: 'GitSCM', 'branches': [[name: 'master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/kelya9/terraform-pipeline.git']]])
+            }
+        }
+        stage('check-if-file-exist') {
+            steps {
+              script {
+                git branch: 'master', url:'https://github.com/kelya9/terraform-pipeline.git'
+                sh 'if [ -f "$FILE" ]; then echo "file exist"; else echo "file does not exist." && exit1; fi'
+              }
+            }
+        }
+        stage ('Setting variables') {
+            steps {
+                script {
+                    sh '''
+                        yq '(.regions.region)' ${FILE}
+                        new_region=$(yq '(.regions.region)' ${FILE})
+                        echo "$new_region"
+                        echo AWS_DEFAULT_REGION
+                        AWS_DEFAULT_REGION=$new_region
+                    '''
+                }
+            } 
+        }
+        stage('Terraform') {
+            steps {
+                script {
+                   sh '''
+                        pwd
+                        yq '(.regions.region)' ${FILE}
+                        new_region=$(yq '(.regions.region)' ${FILE})
+                        echo "$new_region"
+                        echo AWS_DEFAULT_REGION
+                        AWS_DEFAULT_REGION=$new_region
+                        terraform init -input=false
+                        terraform validate
+                    '''
+                } 
+            }
+
+        }
+        stage('plan') {
+             steps {
+                script {
+                    sh '''
+                        #pwd
+                        # yq '(.regions.region)' ${FILE}
+                        #new_region=$(yq '(.regions.region)' ${FILE})
+                        #echo "$new_region"
+                        #echo AWS_DEFAULT_REGION
+                        #AWS_DEFAULT_REGION=$new_region
+                        #terrform workspace new ${environment}
+                        terraform plan -input=false -out create.tfplan
+                        terraform plan -no-color -out=create.tfplan
+                    '''
+                }
+            }
+        }
+        stage('Apply') {
+          steps {
+             script{
+                sh '''
+                    terraform apply "create.tfplan"
+                '''
+               }
+            }
+       }
+        
+    }
+}
