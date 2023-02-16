@@ -62,7 +62,6 @@ pipeline {
                         #AWS_DEFAULT_REGION=$new_region
                         #terrform workspace new ${environment}
                         terraform plan -input=false -out create.tfplan
-                        terraform plan -no-color -out=create.tfplan
                     '''
                 }
             }
